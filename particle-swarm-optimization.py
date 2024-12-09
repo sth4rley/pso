@@ -26,6 +26,34 @@ class Particula:
         self.melhor_pos_part = copy.copy(self.posicao)
         self.melhor_fitness_part = self.fitness
 
+    def atualizar_posicao(self, melhor_pos_enxame, inercia, fator_cognitivo, fator_social, minx, maxx):
+        # Calcula a nova velocidade da partícula
+        for k in range(len(self.posicao)): # Para cada dimensão
+            r1 = self.rnd.random()
+            r2 = self.rnd.random()
+
+            # Atualiza a velocidade
+            self.velocidade[k] = (
+                inercia * self.velocidade[k] +
+                fator_cognitivo * r1 * (self.melhor_pos_part[k] - self.posicao[k]) +
+                fator_social * r2 * (melhor_pos_enxame[k] - self.posicao[k])
+            )
+
+            # Limita a velocidade
+            self.velocidade[k] = max(minx, min(self.velocidade[k], maxx))
+
+        # Atualiza a posição da partícula
+        for k in range(len(self.posicao)):
+            self.posicao[k] += self.velocidade[k]
+
+        # Calcula o fitness da nova posição
+        self.fitness = self.fitness_function(self.posicao)
+
+        # Atualiza a melhor posição da partícula
+        if self.fitness < self.melhor_fitness_part:
+            self.melhor_fitness_part = self.fitness
+            self.melhor_pos_part = copy.copy(self.posicao)
+
 # PSO com animação
 def pso(fitness_function, max_iter, n, dim, minx, maxx):
     # Hiperparâmetros
@@ -67,38 +95,7 @@ def pso(fitness_function, max_iter, n, dim, minx, maxx):
 
         # Atualiza cada partícula
         for i in range(n):
-            # Calcula a nova velocidade da partícula
-            for k in range(dim):
-                r1 = rnd.random()
-                r2 = rnd.random()
-
-                # Atualiza a velocidade
-                # v(t+1) = w * v(t) + c1 * r1 * (p(t) - x(t)) + c2 * r2 * (g(t) - x(t))
-                # ou seja, a nova velocidade é a soma de três componentes:
-                # 1. A inércia da velocidade atual
-                # 2. A atração cognitiva (p(t) - x(t)), onde p(t) é a melhor posição da partícula e x(t) é a posição atual
-                # 3. A atração social (g(t) - x(t)), onde g(t) é a melhor posição do enxame
-                
-                enxame[i].velocidade[k] = (
-                    inercia * enxame[i].velocidade[k] +
-                    fator_cognitivo * r1 * (enxame[i].melhor_pos_part[k] - enxame[i].posicao[k]) +
-                    fator_social * r2 * (melhor_pos_enxame[k] - enxame[i].posicao[k])
-                )
-
-                # Limita a velocidade
-                enxame[i].velocidade[k] = max(minx, min(enxame[i].velocidade[k], maxx))
-
-            # Atualiza a posição da partícula
-            for k in range(dim):
-                enxame[i].posicao[k] += enxame[i].velocidade[k]
-
-            # Calcula o fitness da nova posição
-            enxame[i].fitness = fitness_function(enxame[i].posicao)
-
-            # Atualiza a melhor posição da partícula
-            if enxame[i].fitness < enxame[i].melhor_fitness_part:
-                enxame[i].melhor_fitness_part = enxame[i].fitness
-                enxame[i].melhor_pos_part = copy.copy(enxame[i].posicao)
+            enxame[i].atualizar_posicao(melhor_pos_enxame, inercia, fator_cognitivo, fator_social, minx, maxx)
 
             # Atualiza a melhor solução global
             if enxame[i].fitness < melhor_fitness_enxame:
@@ -156,4 +153,4 @@ if __name__ == "__main__":
     # Escolha da função de fitness
     melhor_solucao = pso(fitness_quadratica, max_iter=50, n=10, dim=2, minx=-100, maxx=100)
     print(f"Melhor solução encontrada: {melhor_solucao}")
-
+    print(f"Fitness da melhor solução: {fitness_quadratica(melhor_solucao)}")
