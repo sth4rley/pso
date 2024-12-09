@@ -1,32 +1,33 @@
-#!/usr/bin/env python3
-
 import random
 import copy
-import sys
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import matplotlib
+import math
 
+matplotlib.use('tkAgg')
+
+# Classe para Partícula
 class Particula:
-    def __init__(self, fitness, dim, minx, maxx, seed):
+    def __init__(self, fitness_function, dim, minx, maxx, seed):
         self.rnd = random.Random(seed)
-
         self.posicao = [0.0] * dim
         self.velocidade = [0.0] * dim
         self.melhor_pos_part = [0.0] * dim
 
-        # Loop para calcular a posição e a velocidade aleatória
-        # O intervalo para a posição e velocidade é [minx, maxx]
+        # Inicializa a posição e velocidade da partícula aleatoriamente
         for i in range(dim):
             self.posicao[i] = ((maxx - minx) * self.rnd.random() + minx)
             self.velocidade[i] = ((maxx - minx) * self.rnd.random() + minx)
 
-        # Calcula o fitness da partícula
-        self.fitness = fitness(self.posicao)  # fitness atual
-
-        # Inicializa a melhor posição e o melhor fitness da partícula
+        self.fitness_function = fitness_function
+        self.fitness = self.fitness_function(self.posicao)
         self.melhor_pos_part = copy.copy(self.posicao)
-        self.melhor_fitness_part = self.fitness  # melhor fitness
+        self.melhor_fitness_part = self.fitness
 
-# Função de otimização por enxame de partículas (PSO)
-def pso(fitness, max_iter, n, dim, minx, maxx):
+# PSO com animação
+def pso(fitness_function, max_iter, n, dim, minx, maxx):
     # Hiperparâmetros
     inercia = 0.729
     fator_cognitivo = 1.49445
@@ -35,60 +36,124 @@ def pso(fitness, max_iter, n, dim, minx, maxx):
     rnd = random.Random(0)
 
     # Cria n partículas aleatórias
-    enxame = [Particula(fitness, dim, minx, maxx, i) for i in range(n)]
+    enxame = [Particula(fitness_function, dim, minx, maxx, i) for i in range(n)]
 
-    # Calcula a melhor posição e o melhor fitness do enxame
-    melhor_pos_enxame = [0.0 for i in range(dim)]
-    melhor_fitness_enxame = sys.float_info.max  # melhor do enxame
+    # Melhor solução global
+    melhor_pos_enxame = [0.0 for _ in range(dim)]
+    melhor_fitness_enxame = float('inf')
 
-    # Encontra a melhor partícula do enxame e seu fitness
-    for i in range(n):  # Verifica cada partícula
-        if enxame[i].fitness < melhor_fitness_enxame:
-            melhor_fitness_enxame = enxame[i].fitness
-            melhor_pos_enxame = copy.copy(enxame[i].posicao)
+    # Configurações do gráfico
+    fig, ax = plt.subplots(figsize=(8, 6))
+    x = np.linspace(minx, maxx, 100)
+    y = np.linspace(minx, maxx, 100)
+    X, Y = np.meshgrid(x, y)
+    Z = np.array([[fitness_function([xi, yi]) for xi in x] for yi in y])
+    contour = ax.contourf(X, Y, Z, levels=50, cmap="viridis")
 
-    # Loop principal do PSO
-    iteracao = 0
-    while iteracao < max_iter:
-        # A cada 10 iterações
-        # Exibe o número da iteração e o melhor valor de fitness até agora
-        if iteracao % 10 == 0 and iteracao > 1:
-            print(f"Iteração = {iteracao} melhor fitness = {melhor_fitness_enxame:.3f}")
+    # Inicializa os pontos das partículas e da melhor solução
+    particles_scatter = ax.scatter([], [], color="blue", label="Partículas")
+    best_scatter = ax.scatter([], [], color="red", label="Melhor solução")
+    ax.legend()
+    ax.set_xlim(minx, maxx)
+    ax.set_ylim(minx, maxx)
+    ax.set_title("PSO: Otimização Animada")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    fig.colorbar(contour, label="Fitness")
 
-        for i in range(n):  # Processa cada partícula
-            # Calcula a nova velocidade da partícula atual
+    # Função para atualizar o gráfico em cada frame
+    def update(frame):
+        nonlocal melhor_fitness_enxame, melhor_pos_enxame
+
+        # Atualiza cada partícula
+        for i in range(n):
+            # Calcula a nova velocidade da partícula
             for k in range(dim):
                 r1 = rnd.random()
                 r2 = rnd.random()
 
+                # Atualiza a velocidade
+                # v(t+1) = w * v(t) + c1 * r1 * (p(t) - x(t)) + c2 * r2 * (g(t) - x(t))
+                # ou seja, a nova velocidade é a soma de três componentes:
+                # 1. A inércia da velocidade atual
+                # 2. A atração cognitiva (p(t) - x(t)), onde p(t) é a melhor posição da partícula e x(t) é a posição atual
+                # 3. A atração social (g(t) - x(t)), onde g(t) é a melhor posição do enxame
+                
                 enxame[i].velocidade[k] = (
-                    (inercia * enxame[i].velocidade[k]) +
-                    (fator_cognitivo * r1 * (enxame[i].melhor_pos_part[k] - enxame[i].posicao[k])) +
-                    (fator_social * r2 * (melhor_pos_enxame[k] - enxame[i].posicao[k]))
+                    inercia * enxame[i].velocidade[k] +
+                    fator_cognitivo * r1 * (enxame[i].melhor_pos_part[k] - enxame[i].posicao[k]) +
+                    fator_social * r2 * (melhor_pos_enxame[k] - enxame[i].posicao[k])
                 )
 
-                # Se a velocidade[k] não estiver no intervalo [minx, max], então limita o valor
-                if enxame[i].velocidade[k] < minx:
-                    enxame[i].velocidade[k] = minx
-                elif enxame[i].velocidade[k] > maxx:
-                    enxame[i].velocidade[k] = maxx
+                # Limita a velocidade
+                enxame[i].velocidade[k] = max(minx, min(enxame[i].velocidade[k], maxx))
 
-            # Calcula a nova posição usando a nova velocidade
+            # Atualiza a posição da partícula
             for k in range(dim):
                 enxame[i].posicao[k] += enxame[i].velocidade[k]
 
             # Calcula o fitness da nova posição
-            enxame[i].fitness = fitness(enxame[i].posicao)
+            enxame[i].fitness = fitness_function(enxame[i].posicao)
 
-            # A nova posição é a melhor para a partícula?
+            # Atualiza a melhor posição da partícula
             if enxame[i].fitness < enxame[i].melhor_fitness_part:
                 enxame[i].melhor_fitness_part = enxame[i].fitness
                 enxame[i].melhor_pos_part = copy.copy(enxame[i].posicao)
 
-            # A nova posição é a melhor do enxame?
+            # Atualiza a melhor solução global
             if enxame[i].fitness < melhor_fitness_enxame:
                 melhor_fitness_enxame = enxame[i].fitness
                 melhor_pos_enxame = copy.copy(enxame[i].posicao)
 
-        iteracao += 1 
+        # Atualiza os dados do gráfico
+        x_data = [p.posicao[0] for p in enxame]
+        y_data = [p.posicao[1] for p in enxame]
+        particles_scatter.set_offsets(np.c_[x_data, y_data])
+        best_scatter.set_offsets(np.c_[melhor_pos_enxame[0], melhor_pos_enxame[1]])
+        ax.set_title(f"Iteração {frame + 1} - Melhor Fitness = {melhor_fitness_enxame:.6f}")
+
+    # Configura a animação
+    ani = FuncAnimation(fig, update, frames=max_iter, interval=75, repeat=False)
+
+    plt.show()
+
     return melhor_pos_enxame
+
+# Funções de fitness
+
+# Função Quadrática Simples (Parabólica) 
+# f(x, y) = x^2 + y^2 
+def fitness_quadratica(pos):
+    x, y = pos
+    return x**2 + y**2
+
+# Função Griewank
+# f(x, y) = 1 + (x^2 + y^2) / 4000 - cos(x) * cos(y / sqrt(2)) 
+def fitness_griewank(pos):
+    x, y = pos
+    return 1 + (x**2 + y**2) / 4000 - math.cos(x) * math.cos(y / math.sqrt(2))
+
+# Função de Ackley
+# f(x, y) = -20 * exp(-0.2 * sqrt(0.5 * (x^2 + y^2))) - exp(0.5 * (cos(2 * π * x) + cos(2 * π * y))) + e + 20
+def fitness_ackley(pos):
+    x, y = pos
+    return -20 * math.exp(-0.2 * math.sqrt(0.5 * (x**2 + y**2))) - math.exp(0.5 * (math.cos(2 * math.pi * x) + math.cos(2 * math.pi * y))) + math.e + 20
+
+# Função de Schaffer
+# f(x, y) = 0.5 + (sin(x^2 - y^2)^2 - 0.5) / (1 + 0.001 * (x^2 + y^2))^2
+def fitness_schaffer(pos):
+    x, y = pos
+    return 0.5 + (math.sin(x**2 - y**2)**2 - 0.5) / (1 + 0.001 * (x**2 + y**2))**2
+
+# Função de Rastrigin 
+# f(x) = 10 * 2 + sum([(x^2 - 10 * cos(2 * π * x))]) 
+def fitness_rastrigin(pos):
+    return 10 * len(pos) + sum([x**2 - 10 * math.cos(2 * math.pi * x) for x in pos])
+
+
+# Executa o programa principal
+if __name__ == "__main__":
+    # Escolha da função de fitness
+    melhor_solucao = pso(fitness_quadratica, max_iter=50, n=10, dim=2, minx=-100, maxx=100)
+    print(f"Melhor solução encontrada: {melhor_solucao}")
+
